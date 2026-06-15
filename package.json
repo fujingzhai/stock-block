@@ -1,0 +1,25 @@
+{
+  "name": "stock-block",
+  "version": "0.2.0",
+  "description": "A SiYuan plugin for embedding a unified stock block (records, fundamentals, normalized trend comparison) in documents.",
+  "repository": "https://github.com/fujingzhai/stock-block",
+  "homepage": "",
+  "author": "游夏",
+  "license": "MIT",
+  "packageManager": "pnpm@10.33.0",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm build:plugin && vite build --config vite.config.widget.ts --watch",
+    "build:plugin": "vite build --config vite.config.plugin.ts",
+    "build:widget": "vite build --config vite.config.widget.ts",
+    "build": "pnpm build:plugin && pnpm build:widget && node scripts/copy-static.mjs && node scripts/package.mjs",
+    "make-install": "pnpm build && node scripts/install.mjs"
+  },
+  "dependencies": {
+    "siyuan": "^1.2.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^7.2.7"
+  }
+}

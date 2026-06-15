@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>股票块 · dev</title>
+    <style>
+      body { background: #f7f6f3; }
+      html.dark body { background: #1e1e1e; }
+      #app { max-width: 900px; margin: 24px auto; }
+      body:has([data-mode="panel"]), body:has(#app .app.panel) { margin: 0; }
+      body:has(#app .app.panel) #app { max-width: none; height: 100vh; margin: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/widget/dev.ts"></script>
+  </body>
+</html>

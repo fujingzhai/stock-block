@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "updated": "2026-06-15T00:00:00.000Z",
+  "tags": [
+    { "id": "t1", "name": "算力主机", "color": "#039BE5" },
+    { "id": "t2", "name": "具身智能", "color": "#33B679" },
+    { "id": "t3", "name": "AI软件", "color": "#8E24AA" }
+  ],
+  "positions": [
+    { "id": "p1", "name": "浪潮信息", "tagIds": ["t1"], "buyDate": "2026-03-10", "buyPrice": 52.3, "buyQty": 200, "sellDate": "2026-04-13", "sellPrice": 48.6, "sellQty": 200, "created": 1000 },
+    { "id": "p2", "name": "中大力德", "tagIds": ["t2"], "buyDate": "2026-04-16", "buyPrice": 33.8, "buyQty": 300, "sellDate": "2026-05-26", "sellPrice": 39.2, "sellQty": 300, "created": 2000 },
+    { "id": "p3", "name": "拓维信息", "tagIds": ["t1", "t3"], "buyDate": "2026-05-27", "buyPrice": 21.5, "buyQty": 500, "created": 3000 }
+  ],
+  "lastTagIds": ["t1"],
+  "sortBy": "active",
+  "sortOrder": "desc"
+}

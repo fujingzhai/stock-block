@@ -1,0 +1,37 @@
+{
+  "name": "stock-block",
+  "author": "游夏",
+  "url": "https://github.com/fujingzhai/stock-block",
+  "version": "0.2.0",
+  "minAppVersion": "3.6.0",
+  "backends": [
+    "windows",
+    "linux",
+    "darwin"
+  ],
+  "frontends": [
+    "desktop",
+    "desktop-window",
+    "browser-desktop"
+  ],
+  "displayName": {
+    "default": "Stock Block",
+    "zh_CN": "股票块"
+  },
+  "description": {
+    "default": "Embed a unified stock block to record trades, view fundamentals and compare normalized price trends.",
+    "zh_CN": "在思源文档中嵌入统一股票块，支持记录交易、查看基本面与归一化走势对比。"
+  },
+  "readme": {
+    "default": "README.md",
+    "zh_CN": "README_zh_CN.md"
+  },
+  "keywords": [
+    "stock",
+    "股票",
+    "持仓",
+    "走势",
+    "基本面",
+    "对比"
+  ]
+}
