@@ -17,7 +17,7 @@ import { setWidgetHeight } from "../theme";
 import { ICONS, esc, showError, tagPicker } from "../ui";
 import { renderFundamentals } from "./fundamentals";
 import { defaultRefreshRange, indexInfos, renderMarketHub, selectMarketSeries, setMarketPane } from "./marketHub";
-import { fetchBoardKline, fetchFundamental, fetchFundKline, fetchIndexKline, fetchStockKlineByRange, resolveStockCode, resolveSymbol, resolveSymbolManually, SymbolKind } from "../../shared/eastmoney";
+import { fetchBoardKline, fetchFundamental, fetchFundKline, fetchIndexKline, fetchStockKlineByRange, resolveStockCode, resolveSymbolManually, SymbolKind } from "../../shared/eastmoney";
 import type { ViewHandle } from "../main";
 
 type View = "positions" | "fundamentals" | "market";
@@ -25,7 +25,6 @@ type View = "positions" | "fundamentals" | "market";
 const HEIGHT_BUFFER = 18;
 const MAX_HEIGHT = 10000;
 const MIN_HEIGHT = 200;
-const REFRESH_STALE_MS = 24 * 60 * 60 * 1000;
 
 export interface AppOptions {
   /** 面板模式：在独立标签页里放大显示，填满高度、内部滚动 */
@@ -208,12 +207,7 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
     fetchLoading = true;
     render();
     try {
-      let sym;
-      if (forcedKind) {
-        sym = await resolveSymbolManually(input, forcedKind as SymbolKind);
-      } else {
-        sym = await resolveSymbol(input);
-      }
+      const sym = await resolveSymbolManually(input, (forcedKind || "index") as SymbolKind);
       let name = sym.name;
       if (sym.kind === "stock") {
         const kline = await fetchStockKlineByRange(sym.code, range);
@@ -276,7 +270,6 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
         <div class="ff">
           <label>类型</label>
           <select id="fetchKind" class="ff-in">
-            <option value="">选择类型</option>
             <option value="index">大盘</option>
             <option value="board">板块</option>
             <option value="fund">ETF</option>
@@ -410,11 +403,6 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
         ($<HTMLInputElement>("fetchQuery")).focus();
         return;
       }
-      if (!isFund && !forcedKind) {
-        $("fetchErr").textContent = "请选择类型";
-        kindSelect?.focus();
-        return;
-      }
       
       ($("fetchRun") as HTMLButtonElement).disabled = true;
       try {
@@ -444,7 +432,8 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
     let ok = 0;
     let skipped = 0;
     const failures: string[] = [];
-    const isStale = (fetchedAt?: number) => !fetchedAt || Date.now() - fetchedAt > REFRESH_STALE_MS;
+    // 手动点击「刷新」= 强制拉取最新收盘，逐项重新请求，不做缓存跳过
+    const isStale = (_fetchedAt?: number) => true;
     try {
       if (view === "fundamentals") {
         const fRange = fundamentalRange();
@@ -462,7 +451,8 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
           const cached = store.getMarketSeries("index", info.id);
           if (cached && !isStale(cached.fetchedAt)) { skipped++; continue; }
           try {
-            await store.upsertMarketSeries(await fetchIndexKline(info.id, info.name, range));
+            const itemRange = cached ? klineRangeOrDefault(cached.klines || []) : range;
+            await store.upsertMarketSeries(await fetchIndexKline(info.id, info.name, itemRange));
             ok++;
           } catch (err) {
             failures.push(`${info.name}: ${err instanceof Error ? err.message : String(err)}`);
@@ -473,12 +463,13 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
           if (s.kind === "index" && builtinIds.has(s.code)) continue; // 内置指数已在上面刷新
           if (!isStale(s.fetchedAt)) { skipped++; continue; }
           try {
+            const itemRange = klineRangeOrDefault(s.klines || []);
             const refreshed = s.kind === "fund"
-              ? await fetchFundKline(s.code, range)
+              ? await fetchFundKline(s.code, itemRange)
               : s.kind === "board"
-                ? await fetchBoardKline(s.code, range)
+                ? await fetchBoardKline(s.code, itemRange)
                 : s.kind === "index"
-                  ? await fetchIndexKline(s.code, s.name, range)
+                  ? await fetchIndexKline(s.code, s.name, itemRange)
                   : null;
             if (!refreshed) continue;
             await store.upsertMarketSeries(refreshed);
@@ -490,15 +481,16 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
         for (const s of store.individualStocks) {
           if (!isStale(s.fetchedAt)) { skipped++; continue; }
           try {
-            await store.upsertStockKline(await fetchStockKlineByRange(s.code, range));
+            const itemRange = klineRangeOrDefault(s.klines || []);
+            await store.upsertStockKline(await fetchStockKlineByRange(s.code, itemRange));
             ok++;
           } catch (err) {
             failures.push(`${s.name || s.code}: ${err instanceof Error ? err.message : String(err)}`);
           }
         }
       }
-      if (!ok && !failures.length) showToast(`无需刷新：${skipped} 项仍在缓存期内`, "ok");
-      else showToast(failures.length ? `刷新完成：成功 ${ok}，跳过 ${skipped}，失败 ${failures.length}` : `刷新成功：${ok} 项，跳过 ${skipped} 项`, failures.length ? "err" : "ok");
+      if (!ok && !failures.length) showToast("暂无可刷新的数据", "ok");
+      else showToast(failures.length ? `刷新完成：成功 ${ok} 项，失败 ${failures.length} 项` : `刷新成功：${ok} 项已更新到最新`, failures.length ? "err" : "ok");
     } finally {
       fetchLoading = false;
       render();
@@ -825,6 +817,16 @@ function fundamentalRange(): { startDate: string; endDate: string } {
 function dateInputStr(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** 根据已有K线推算刷新范围：从最早日期到今天；无数据时回退默认1年 */
+function klineRangeOrDefault(klines: { date: string; close: number }[]): { startDate: string; endDate: string } {
+  if (klines.length) {
+    const dates = klines.map((k) => k.date);
+    const earliest = dates.reduce((a, b) => (a < b ? a : b));
+    return { startDate: earliest, endDate: dateInputStr(new Date()) };
+  }
+  return defaultRefreshRange();
 }
 
 function showToast(message: string, type: "ok" | "err" = "ok"): void {

@@ -224,9 +224,20 @@ export class StockStore {
     const idx = this.data.individualStocks.findIndex((x) => x.code === s.code);
     if (idx >= 0) {
       const prev = this.data.individualStocks[idx];
-      this.data.individualStocks[idx] = { ...s, tagIds: s.tagIds ?? prev.tagIds ?? [] };
+      const mergedKlines = mergeKlines(prev.klines || [], s.klines || []);
+      this.data.individualStocks[idx] = { ...s, klines: mergedKlines, tagIds: s.tagIds ?? prev.tagIds ?? [] };
     }
-    else this.data.individualStocks.push(s);
+    else {
+      // 防竞争：push 前再查一次，防止并发 upsert 已经插入
+      const raceIdx = this.data.individualStocks.findIndex((x) => x.code === s.code);
+      if (raceIdx >= 0) {
+        const prev = this.data.individualStocks[raceIdx];
+        const mergedKlines = mergeKlines(prev.klines || [], s.klines || []);
+        this.data.individualStocks[raceIdx] = { ...s, klines: mergedKlines, tagIds: s.tagIds ?? prev.tagIds ?? [] };
+      } else {
+        this.data.individualStocks.push(s);
+      }
+    }
     await this.persist();
   }
   async removeStockKline(code: string): Promise<void> {
@@ -294,9 +305,20 @@ export class StockStore {
     const idx = this.data.marketSeries.findIndex((x) => x.kind === s.kind && x.code === s.code);
     if (idx >= 0) {
       const prev = this.data.marketSeries[idx];
-      this.data.marketSeries[idx] = { ...s, tagIds: s.tagIds ?? prev.tagIds ?? [] };
+      const mergedKlines = mergeKlines(prev.klines || [], s.klines || []);
+      this.data.marketSeries[idx] = { ...s, klines: mergedKlines, tagIds: s.tagIds ?? prev.tagIds ?? [] };
     }
-    else this.data.marketSeries.push(s);
+    else {
+      // 防竞争：push 前再查一次，防止并发 upsert 已经插入
+      const raceIdx = this.data.marketSeries.findIndex((x) => x.kind === s.kind && x.code === s.code);
+      if (raceIdx >= 0) {
+        const prev = this.data.marketSeries[raceIdx];
+        const mergedKlines = mergeKlines(prev.klines || [], s.klines || []);
+        this.data.marketSeries[raceIdx] = { ...s, klines: mergedKlines, tagIds: s.tagIds ?? prev.tagIds ?? [] };
+      } else {
+        this.data.marketSeries.push(s);
+      }
+    }
     await this.persist();
   }
   async removeMarketSeries(kind: MarketKind, code: string): Promise<void> {
@@ -402,7 +424,33 @@ export class StockStore {
       const f = this.getFundamental(s.code);
       if (f) f.tagIds = [...(s.tagIds || [])];
     }
+    // 去重：同一 (kind, code) 只保留 K 线条数最多的一条（防止并发 upsert 产生重复）
+    this.data.marketSeries = this.dedupMarketSeries(this.data.marketSeries);
+    this.data.individualStocks = this.dedupStocks(this.data.individualStocks);
     this.data.lastTagIds = (this.data.lastTagIds || []).filter((id) => ids.has(id));
+  }
+
+  private dedupMarketSeries(list: MarketKline[]): MarketKline[] {
+    const best = new Map<string, MarketKline>();
+    for (const s of list) {
+      const key = `${s.kind}:${s.code}`;
+      const prev = best.get(key);
+      if (!prev || (s.klines?.length || 0) > (prev.klines?.length || 0)) {
+        best.set(key, s);
+      }
+    }
+    return Array.from(best.values());
+  }
+
+  private dedupStocks(list: StockKline[]): StockKline[] {
+    const best = new Map<string, StockKline>();
+    for (const s of list) {
+      const prev = best.get(s.code);
+      if (!prev || (s.klines?.length || 0) > (prev.klines?.length || 0)) {
+        best.set(s.code, s);
+      }
+    }
+    return Array.from(best.values());
   }
 
   private rememberTags(tagIds: string[]): void {
@@ -433,15 +481,6 @@ export class StockStore {
         s.kind = "board";
       }
     }
-    const builtinIds = new Set([
-      "sh000001", "sh000002", "sh000003", "sh000016", "sh000300", "sh000905", "sh000852", "sh000688",
-      "sz399001", "sz399005", "sz399006", "sz399300"
-    ]);
-    for (const s of this.data.marketSeries || []) {
-      if (s.kind === "index" && !builtinIds.has(s.code)) {
-        s.kind = "board";
-      }
-    }
   }
 
   private async persist(): Promise<void> {
@@ -466,4 +505,17 @@ export class StockStore {
     await task;
     this.channel?.postMessage("changed");
   }
+}
+
+/** 合并新旧K线：按日期去重，同日以新值为准，结果按日期升序 */
+function mergeKlines(
+  old: { date: string; close: number }[],
+  incoming: { date: string; close: number }[]
+): { date: string; close: number }[] {
+  const map = new Map<string, number>();
+  for (const k of old) map.set(k.date, k.close);
+  for (const k of incoming) map.set(k.date, k.close);
+  return Array.from(map.entries())
+    .map(([date, close]) => ({ date, close }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 }

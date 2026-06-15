@@ -231,10 +231,16 @@ export function getStartDate(endDateStr: string, timeframe: string): string {
     case "1Y":
       y -= 1;
       break;
+    case "2Y":
+      y -= 2;
+      break;
+    case "3Y":
+      y -= 3;
+      break;
     case "YTD":
       return `${y}-01-01`;
     default:
-      return "2020-01-01"; // 全部
+      return "1990-01-01"; // 全部范围
   }
 
   if (m < 0) {

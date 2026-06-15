@@ -39,6 +39,7 @@ interface MarketState {
   periodEnd?: string;
   periodLabel?: string;
   sinceDate?: string;
+  sortBy?: Record<string, "pinyin" | "code">;
 }
 
 interface PeriodYearGroup {
@@ -70,11 +71,14 @@ const FILTERS: Array<{ key: MarketPane; label: string }> = [
 const PALETTE = ["#1890ff", "#52c41a", "#ff4d4f", "#722ed1", "#fa8c16", "#13c2c2", "#eb2f96", "#2f54eb", "#ffa940", "#8c8c8c"];
 const LEGACY_DEFAULT_SELECTED_KEYS = ["index:sh000300", "index:sh000001", "index:sz399006"];
 const RECENT_RANGES = [
-  { value: "1Y", label: "最近1年" },
   { value: "YTD", label: "今年" },
-  { value: "6M", label: "最近6月" },
+  { value: "1M", label: "最近1月" },
   { value: "3M", label: "最近3月" },
-  { value: "1M", label: "最近1月" }
+  { value: "6M", label: "最近6月" },
+  { value: "1Y", label: "最近1年" },
+  { value: "2Y", label: "最近2年" },
+  { value: "3Y", label: "最近3年" },
+  { value: "All", label: "全部范围" }
 ];
 
 function seriesKey(kind: MarketPane, code: string): string {
@@ -104,12 +108,15 @@ function loadState(): MarketState {
         return {
           filter: isPane(parsed.filter) ? parsed.filter : getLegacyPane(),
           selectedKeys: normalizeSelectedKeys(parsed.selectedKeys),
-          timeframe: RECENT_RANGES.some((r) => r.value === parsed.timeframe) ? parsed.timeframe : "1Y",
+          timeframe: RECENT_RANGES.some((r) => r.value === parsed.timeframe) ? parsed.timeframe : "YTD",
           rangeMode: parsed.rangeMode === "period" || parsed.rangeMode === "since" ? parsed.rangeMode : "recent",
           periodStart: typeof parsed.periodStart === "string" ? parsed.periodStart : undefined,
           periodEnd: typeof parsed.periodEnd === "string" ? parsed.periodEnd : undefined,
           periodLabel: typeof parsed.periodLabel === "string" ? parsed.periodLabel : undefined,
-          sinceDate: typeof parsed.sinceDate === "string" ? parsed.sinceDate : undefined
+          sinceDate: typeof parsed.sinceDate === "string" ? parsed.sinceDate : undefined,
+          sortBy: typeof parsed.sortBy === "object" && parsed.sortBy !== null
+            ? parsed.sortBy as Record<string, "pinyin" | "code">
+            : {}
         };
       }
     }
@@ -119,8 +126,9 @@ function loadState(): MarketState {
   return {
     filter: getLegacyPane(),
     selectedKeys: [],
-    timeframe: "1Y",
-    rangeMode: "recent"
+    timeframe: "YTD",
+    rangeMode: "recent",
+    sortBy: {}
   };
 }
 
@@ -271,8 +279,14 @@ export function renderMarketHub(host: HTMLElement, store: StockStore, fit: () =>
           ${FILTERS.map((p) => `<button class="market-hub-tab${p.key === state.filter ? " on" : ""}" data-pane="${p.key}">${p.label}</button>`).join("")}
         </div>
         <div class="idx-header compact" ${state.filter === "tag" ? 'style="display:none;"' : ""}>
-          <input type="checkbox" id="series-all" />
-          <label for="series-all"><b>${kindLabel(state.filter)}</b></label>
+          <span style="display:flex;align-items:center;gap:4px;">
+            <input type="checkbox" id="series-all" />
+            <label for="series-all"><b>${kindLabel(state.filter)}</b></label>
+          </span>
+          <select id="sortSelect" class="sort-select" style="font-size:11px;padding:1px 2px;border:1px solid var(--line);border-radius:4px;background:var(--card);color:var(--fg);cursor:pointer;">
+            <option value="pinyin" ${state.sortBy?.[state.filter] !== "code" ? "selected" : ""}>音序</option>
+            <option value="code" ${state.sortBy?.[state.filter] === "code" ? "selected" : ""}>代码</option>
+          </select>
         </div>
         <div class="idx-list compact" id="seriesList"></div>
       </aside>
@@ -293,7 +307,11 @@ export function renderMarketHub(host: HTMLElement, store: StockStore, fit: () =>
   const tooltip = host.querySelector("#chartTooltip") as HTMLElement;
 
   function visibleSeries(): UnifiedSeries[] {
-    return series.filter((s) => s.kind === state.filter);
+    const items = series.filter((s) => s.kind === state.filter);
+    if (state.sortBy?.[state.filter] === "code") {
+      return items.sort((a, b) => a.code.localeCompare(b.code));
+    }
+    return items.sort((a, b) => a.name.localeCompare(b.name, "zh"));
   }
 
   function paintList(): void {
@@ -425,10 +443,12 @@ export function renderMarketHub(host: HTMLElement, store: StockStore, fit: () =>
 
     headCenter.innerHTML = `
       <div class="range-switch" id="rangeSwitch">
-        <select class="range-control ${state.rangeMode === "recent" ? "on" : ""}" id="recentRange" title="最近时间范围">
-          <option value="" disabled ${state.rangeMode !== "recent" ? "selected" : ""}>最近范围</option>
-          ${RECENT_RANGES.map((r) => `<option value="${r.value}" ${state.rangeMode === "recent" && state.timeframe === r.value ? "selected" : ""}>${r.label}</option>`).join("")}
-        </select>
+        <div class="recent-range" id="recentRange">
+          <button class="range-control recent-range-trigger${state.rangeMode === "recent" ? " on" : ""}" type="button" title="最近时间范围">${esc(state.rangeMode === "recent" ? (RECENT_RANGES.find((r) => r.value === (state.timeframe || "YTD"))?.label || "最近范围") : "最近范围")}</button>
+          <div class="recent-range-menu">
+            ${RECENT_RANGES.map((r) => `<button class="period-option${state.rangeMode === "recent" && state.timeframe === r.value ? " on" : ""}" type="button" data-value="${r.value}">${esc(r.label)}</button>`).join("")}
+          </div>
+        </div>
         <div class="range-period ${state.rangeMode === "period" ? "on" : ""}" id="periodRange">
           <button class="range-control range-period-trigger" type="button" title="特定年份或季度">${esc(periodLabel)}</button>
           <div class="range-period-menu">
@@ -450,7 +470,7 @@ export function renderMarketHub(host: HTMLElement, store: StockStore, fit: () =>
       </div>
     `;
 
-    const recentRange = headCenter.querySelector("#recentRange") as HTMLSelectElement;
+    const recentRange = headCenter.querySelector("#recentRange") as HTMLElement;
     const periodRange = headCenter.querySelector("#periodRange") as HTMLElement;
     const periodTrigger = headCenter.querySelector(".range-period-trigger") as HTMLButtonElement;
     const sinceRange = headCenter.querySelector("#sinceRange") as HTMLInputElement;
@@ -461,10 +481,18 @@ export function renderMarketHub(host: HTMLElement, store: StockStore, fit: () =>
     // 全程原地更新三个控件，从不重建 DOM：既保住日期框的焦点，
     // 也避免重建后鼠标静止在按钮上、:hover 不重新触发而必须先点一下才弹出子菜单的问题。
     const syncRangeUI = () => {
-      recentRange.classList.toggle("on", state.rangeMode === "recent");
+      recentRange.querySelectorAll<HTMLButtonElement>(".recent-range-menu .period-option").forEach((opt) => {
+        opt.classList.toggle("on", state.rangeMode === "recent" && opt.dataset.value === (state.timeframe || "YTD"));
+      });
+      const recentTrigger = recentRange.querySelector(".recent-range-trigger") as HTMLButtonElement;
+      if (recentTrigger) {
+        recentTrigger.classList.toggle("on", state.rangeMode === "recent");
+        recentTrigger.textContent = state.rangeMode === "recent"
+          ? (RECENT_RANGES.find((r) => r.value === (state.timeframe || "YTD"))?.label || "最近范围")
+          : "最近范围";
+      }
       periodRange.classList.toggle("on", state.rangeMode === "period");
       sinceRange.classList.toggle("on", state.rangeMode === "since");
-      recentRange.value = state.rangeMode === "recent" ? (state.timeframe || "1Y") : "";
       periodTrigger.textContent = state.rangeMode === "period" && state.periodLabel ? state.periodLabel : "年份/季度";
       periodRange.querySelectorAll<HTMLButtonElement>(".period-option").forEach((opt) => {
         const on = state.rangeMode === "period" && opt.dataset.start === state.periodStart && opt.dataset.end === state.periodEnd;
@@ -476,38 +504,66 @@ export function renderMarketHub(host: HTMLElement, store: StockStore, fit: () =>
       }
     };
 
-    recentRange.addEventListener("change", () => {
-      if (!recentRange.value) return; // 选中占位项时忽略
-      state.rangeMode = "recent";
-      state.timeframe = recentRange.value;
-      state.periodStart = undefined;
-      state.periodEnd = undefined;
-      state.periodLabel = undefined;
-      state.sinceDate = undefined;
-      saveState(state);
-      syncRangeUI();
-      drawChart();
-      fit();
+    recentRange.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const opt = (e.target as HTMLElement).closest(".period-option") as HTMLButtonElement | null;
+      if (opt) {
+        const val = opt.dataset.value;
+        if (!val) return;
+        state.rangeMode = "recent";
+        state.timeframe = val;
+        state.periodStart = undefined;
+        state.periodEnd = undefined;
+        state.periodLabel = undefined;
+        state.sinceDate = undefined;
+        saveState(state);
+        syncRangeUI();
+        recentRange.classList.remove("open");
+        periodRange.classList.remove("open");
+        drawChart();
+        fit();
+        return;
+      }
+      // 点击触发器区域，保持菜单展开
+      recentRange.classList.add("open");
+      periodRange.classList.remove("open");
     });
     periodRange.addEventListener("click", (e) => {
+      e.stopPropagation();
       const btn = (e.target as HTMLElement).closest(".period-option") as HTMLButtonElement | null;
-      if (!btn) return;
-      const start = btn.dataset.start || "";
-      const end = btn.dataset.end || "";
-      const label = btn.dataset.label || "";
-      if (!start || !end) return;
-      state.rangeMode = "period";
-      state.periodStart = start;
-      state.periodEnd = end;
-      state.periodLabel = label;
-      state.sinceDate = undefined;
-      saveState(state);
-      syncRangeUI();
-      // 选完立刻收起菜单，避免重建造成的 hover 卡顿；移开再悬停即可重新展开
-      periodTrigger.blur();
-      drawChart();
-      fit();
+      if (btn) {
+        const start = btn.dataset.start || "";
+        const end = btn.dataset.end || "";
+        const label = btn.dataset.label || "";
+        if (!start || !end) return;
+        state.rangeMode = "period";
+        state.periodStart = start;
+        state.periodEnd = end;
+        state.periodLabel = label;
+        state.sinceDate = undefined;
+        saveState(state);
+        syncRangeUI();
+        periodTrigger.blur();
+        periodRange.classList.remove("open");
+        recentRange.classList.remove("open");
+        drawChart();
+        fit();
+        return;
+      }
+      // 点击触发器区域，保持菜单展开
+      periodRange.classList.add("open");
+      recentRange.classList.remove("open");
     });
+    // 点击外部关闭所有下拉菜单
+    if ((host as any)._dropdownCloser) {
+      document.removeEventListener("click", (host as any)._dropdownCloser);
+    }
+    const closer = () => {
+      recentRange.classList.remove("open");
+      periodRange.classList.remove("open");
+    };
+    document.addEventListener("click", closer);
+    (host as any)._dropdownCloser = closer;
     sinceRange.addEventListener("focus", () => {
       sinceRange.type = "date";
       if (dates[0]) sinceRange.min = dates[0];
@@ -520,7 +576,7 @@ export function renderMarketHub(host: HTMLElement, store: StockStore, fit: () =>
     sinceRange.addEventListener("change", () => {
       if (!sinceRange.value) {
         state.rangeMode = "recent";
-        state.timeframe = state.timeframe || "1Y";
+        state.timeframe = state.timeframe || "YTD";
         state.sinceDate = undefined;
       } else {
         state.rangeMode = "since";
@@ -564,7 +620,7 @@ export function renderMarketHub(host: HTMLElement, store: StockStore, fit: () =>
       ? state.periodStart
       : state.rangeMode === "since" && state.sinceDate
         ? state.sinceDate
-        : getStartDate(latestDate, state.timeframe || "1Y");
+        : getStartDate(latestDate, state.timeframe || "YTD");
     const rangeEnd = state.rangeMode === "period" && state.periodEnd ? state.periodEnd : latestDate;
     const activeSeries: Array<UnifiedSeries & { rows: Array<Row & { value: number; dailyPct?: number }> }> = [];
     const allDatesSet = new Set<string>();
@@ -839,6 +895,13 @@ export function renderMarketHub(host: HTMLElement, store: StockStore, fit: () =>
     paintList();
     drawChart();
     fit();
+  });
+  const sortSelect = host.querySelector("#sortSelect") as HTMLSelectElement | null;
+  sortSelect?.addEventListener("change", () => {
+    state.sortBy = state.sortBy || {};
+    state.sortBy[state.filter] = sortSelect.value === "code" ? "code" : "pinyin";
+    saveState(state);
+    paintList();
   });
   paintList();
   paintRangeControls();

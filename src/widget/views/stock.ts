@@ -39,7 +39,7 @@ function loadState(stocks: StockKline[], storageKey: string): StockState {
   return {
     activeCode: "",
     checkedCodes: [],
-    timeframe: "1Y"
+    timeframe: "YTD"
   };
 }
 
@@ -89,12 +89,14 @@ export function renderStock(host: HTMLElement, store: StockStore, fit: () => voi
       <div class="stock-right">
         <div class="market-control-bar">
           <div class="time-tabs" id="stockTimeTabs">
+            <button class="time-tab" data-t="YTD">今年以来</button>
             <button class="time-tab" data-t="1M">1个月</button>
             <button class="time-tab" data-t="3M">3个月</button>
             <button class="time-tab" data-t="6M">6个月</button>
             <button class="time-tab" data-t="1Y">1年</button>
-            <button class="time-tab" data-t="YTD">今年以来</button>
-            <button class="time-tab" data-t="All">全部</button>
+            <button class="time-tab" data-t="2Y">2年</button>
+            <button class="time-tab" data-t="3Y">3年</button>
+            <button class="time-tab" data-t="All">全部范围</button>
           </div>
           <span class="norm-tip" id="stockChartTip">个股实际价格走势</span>
         </div>
