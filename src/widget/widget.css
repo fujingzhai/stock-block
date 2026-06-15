@@ -1132,11 +1132,7 @@ html.dark .pos-trade .leg.sell { color: #4ade80; }
 .ff > .ff-in, .ff > #fTags { flex: 1 1 auto; }
 .ff > #fTags .cat-pick-btn { border: 1px solid var(--line); border-radius: 6px; min-width: 0; width: 100%; padding: 5px 8px; }
 .fp-leg { margin: 12px 0; }
-.fp-leg-title { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
-.fp-leg-title.buy { color: #D50000; }
-.fp-leg-title.sell { color: #0B8043; }
-html.dark .fp-leg-title.buy { color: #ff6b6b; }
-html.dark .fp-leg-title.sell { color: #4ade80; }
+.fp-leg-title { font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--fg-soft); }
 .fp-leg-title .opt { font-weight: 400; color: var(--fg-faint); margin-left: 6px; }
 .ff-grid { display: grid; grid-template-columns: 1.1fr 1fr 1.2fr; gap: 8px; }
 .ff-grid .ff-in { width: 100%; }

@@ -10,7 +10,7 @@ import {
   holdDays,
   isClosed,
   isHexColor,
-  pnl,
+  effSellQty,
   todayStr
 } from "../../shared/model";
 import { setWidgetHeight } from "../theme";
@@ -83,9 +83,29 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
   }
 
   // 表格列（可排序）；标签与操作列另行渲染，不参与排序
-  type ColKey = "name" | "buyDate" | "buyPrice" | "qty" | "sellDate" | "sellPrice" | "pnl" | "pnlPct" | "status";
+  type ColKey = "name" | "buyDate" | "buyPrice" | "qty" | "status" | "sellPrice" | "pnl" | "pnlPct";
   let sortKey: ColKey = "buyDate";
   let sortDir: "asc" | "desc" = "desc";
+
+  function getLatestPrice(name: string): number | null {
+    const stock = store.individualStocks.find((s) => s.name === name);
+    if (!stock?.klines?.length) return null;
+    return stock.klines[stock.klines.length - 1].close;
+  }
+
+  function calcPnl(p: Position): { amount: number; pct: number } | null {
+    if (isClosed(p)) {
+      const sp = p.sellPrice as number;
+      const amount = (sp - p.buyPrice) * effSellQty(p);
+      const pct = p.buyPrice ? sp / p.buyPrice - 1 : 0;
+      return { amount, pct };
+    }
+    const currentPrice = getLatestPrice(p.name);
+    if (currentPrice == null) return null;
+    const amount = (currentPrice - p.buyPrice) * p.buyQty;
+    const pct = p.buyPrice ? currentPrice / p.buyPrice - 1 : 0;
+    return { amount, pct };
+  }
 
   function valOf(p: Position, key: ColKey): number | string {
     switch (key) {
@@ -93,11 +113,10 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
       case "buyDate": return p.buyDate || "";
       case "buyPrice": return p.buyPrice;
       case "qty": return p.buyQty;
-      case "sellDate": return p.sellDate || "";
-      case "sellPrice": return p.sellPrice ?? -1;
-      case "pnl": return pnl(p)?.amount ?? -Infinity;
-      case "pnlPct": return pnl(p)?.pct ?? -Infinity;
       case "status": return isClosed(p) ? 1 : 0;
+      case "sellPrice": return isClosed(p) ? (p.sellPrice ?? -1) : (getLatestPrice(p.name) ?? -1);
+      case "pnl": return calcPnl(p)?.amount ?? -Infinity;
+      case "pnlPct": return calcPnl(p)?.pct ?? -Infinity;
     }
   }
 
@@ -500,13 +519,13 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
   function renderPositions(body: HTMLElement): void {
     const closed = store.positions.filter(isClosed);
     const holding = store.positions.length - closed.length;
-    const realized = closed.reduce((s, p) => s + (pnl(p)?.amount || 0), 0);
-    const closedCost = closed.reduce((s, p) => s + p.buyPrice * p.buyQty, 0);
-    const realizedPct = closedCost ? realized / closedCost : 0;
-    const pnlCls = realized > 0 ? "up" : realized < 0 ? "down" : "";
+    const totalPnl = store.positions.reduce((s, p) => s + (calcPnl(p)?.amount || 0), 0);
+    const totalCost = store.positions.reduce((s, p) => s + p.buyPrice * p.buyQty, 0);
+    const totalPct = totalCost ? totalPnl / totalCost : 0;
+    const pnlCls = totalPnl > 0 ? "up" : totalPnl < 0 ? "down" : "";
     const headCenter = document.getElementById("headCenter");
     if (headCenter) {
-      headCenter.innerHTML = `<span class="position-summary">持仓 ${holding} 笔，清仓 ${closed.length} 笔，总盈亏 <b class="${pnlCls}">${fmtSigned(realized)}</b>，<b class="${pnlCls}">${fmtPct(realizedPct)}</b></span>`;
+      headCenter.innerHTML = `<span class="position-summary">持仓 ${holding} 笔，清仓 ${closed.length} 笔，总盈亏 <b class="${pnlCls}">${fmtSigned(totalPnl)}</b>，<b class="${pnlCls}">${fmtPct(totalPct)}</b></span>`;
     }
     body.innerHTML = `<div class="table-wrap" id="tableWrap"></div>`;
     const wrap = body.querySelector("#tableWrap") as HTMLElement;
@@ -520,14 +539,13 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
   function buildTable(): HTMLElement {
     const headers: Array<{ k?: ColKey; label: string; num?: boolean; cls?: string }> = [
       { k: "name", label: "股票" },
-      { k: "buyDate", label: "买入日" },
-      { k: "buyPrice", label: "买入价", num: true },
+      { k: "buyDate", label: "买入时间" },
+      { k: "buyPrice", label: "成本", num: true },
       { k: "qty", label: "数量", num: true },
-      { k: "sellDate", label: "卖出日" },
-      { k: "sellPrice", label: "卖出价", num: true },
+      { k: "status", label: "状态" },
+      { k: "sellPrice", label: "卖价/现价", num: true },
       { k: "pnl", label: "盈亏", num: true },
-      { k: "pnlPct", label: "盈亏%", num: true },
-      { k: "status", label: "状态" }
+      { k: "pnlPct", label: "盈亏%", num: true }
     ];
     const arrow = (k: ColKey) => (sortKey === k ? (sortDir === "asc" ? " ▲" : " ▼") : "");
     const thHtml = headers.map((h) => {
@@ -557,19 +575,25 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
 
   function buildRow(p: Position): HTMLElement {
     const closed = isClosed(p);
-    const pl = pnl(p);
+    const pl = calcPnl(p);
     const pnlCls = pl ? (pl.amount > 0 ? "up" : pl.amount < 0 ? "down" : "") : "";
+    const currentPrice = closed ? null : getLatestPrice(p.name);
+    const priceDisplay = closed
+      ? fmtPrice(p.sellPrice as number)
+      : currentPrice != null ? fmtPrice(currentPrice) : "—";
+    const statusDisplay = closed
+      ? `<span class="dim">${esc(p.sellDate as string)}</span> 清仓`
+      : "持有中";
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td class="td-name">${esc(p.name)}</td>
       <td class="dim">${esc(p.buyDate)}</td>
       <td class="num">${fmtPrice(p.buyPrice)}</td>
       <td class="num">${fmtNum(p.buyQty)}</td>
-      <td class="dim">${closed ? esc(p.sellDate as string) : "—"}</td>
-      <td class="num">${closed ? fmtPrice(p.sellPrice as number) : "—"}</td>
+      <td>${statusDisplay}</td>
+      <td class="num">${priceDisplay}</td>
       <td class="num ${pnlCls}">${pl ? fmtSigned(pl.amount) : "—"}</td>
       <td class="num ${pnlCls}">${pl ? fmtPct(pl.pct) : "—"}</td>
-      <td><span class="status-pill ${closed ? "closed" : "holding"}">${closed ? "已清仓" : "持有中"}</span></td>
       <td class="td-ops">
         <button class="tx-op" title="编辑">${ICONS.edit}</button>
         <button class="tx-op del" title="删除">${ICONS.del}</button>
@@ -591,7 +615,7 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
     mask.className = "sb-mask";
     mask.innerHTML = `<div class="form-panel">
       <div class="fp-head"><span>${edit ? "编辑记录" : "新建记录"}</span><button class="head-btn" id="fpClose" title="关闭">✕</button></div>
-      <div class="ff"><label>股票</label><input id="fName" class="ff-in" placeholder="名称 / 代码" /></div>
+      <div class="ff"><label>股票</label><input id="fName" class="ff-in" placeholder="名称" /></div>
       <div class="fp-leg">
         <div class="fp-leg-title buy">买入</div>
         <div class="ff-grid">
