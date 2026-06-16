@@ -1093,6 +1093,10 @@ body[data-mode="panel"] .app.panel .table-wrap {
   font-weight: 500;
   line-height: 1.4;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  min-width: 0;
   font-variant-numeric: tabular-nums;
 }
 .position-summary b {
@@ -2109,7 +2113,9 @@ body[data-mode="panel"] .stock-list-item .stock-name {
   display: flex;
   justify-content: center;
   align-items: center;
-  overflow: hidden;
+  /* 不能裁剪：对比视图的下拉菜单是绝对定位、向下弹出的弹层，
+     若此处 overflow:hidden 会把弹层裁掉。文字截断改由子元素自己负责。 */
+  overflow: visible;
 }
 
 .fd-tag-mgr-btn {

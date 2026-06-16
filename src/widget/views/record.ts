@@ -91,6 +91,10 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
   if (!panel && typeof ResizeObserver !== "undefined") {
     let raf = 0;
     const ro = new ResizeObserver(() => {
+      // 仅记录视图启用：对比/分析视图各自带图表 ResizeObserver 与 fit 回调，
+      // 若此处再对它们调用 fit，会与图表观察器形成 resize 反馈回环，
+      // 导致顶栏下拉菜单等 :hover 弹层因布局持续抖动而无法弹出。
+      if (view !== "positions") return;
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(fit);
     });
