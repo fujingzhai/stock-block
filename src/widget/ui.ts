@@ -20,9 +20,9 @@ export function showError(root: HTMLElement, err: unknown): void {
 }
 
 /** 多选标签选择器。按钮展示已选标签色点摘要；下拉里点选切换；返回 wrap 元素，选中变化经 onChange 回调 */
-export function tagPicker(store: StockStore, initial: string[], onChange: (ids: string[]) => void, options: { noColor?: boolean; noName?: boolean } = {}): HTMLElement {
+export function tagPicker(store: StockStore, initial: string[], onChange: (ids: string[]) => void, options: { noColor?: boolean; noName?: boolean; compact?: boolean } = {}): HTMLElement {
   const wrap = document.createElement("div");
-  wrap.className = "cat-pick";
+  wrap.className = `cat-pick${options.compact ? " compact-tag-pick" : ""}`;
   let selected = [...initial];
 
   const btn = document.createElement("button");

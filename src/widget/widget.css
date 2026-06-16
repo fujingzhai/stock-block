@@ -1025,9 +1025,25 @@ body[data-mode="panel"] .app.panel .table-wrap {
 }
 
 /* 头部 */
-.head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
 .head-title { font-size: 15px; font-weight: 600; color: var(--fg); }
-.head-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; flex: 1 1 0%; }
+.head-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: max-content;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
 .head-btn {
   width: 26px; height: 26px; border-radius: 6px; display: inline-flex; align-items: center;
   justify-content: center; color: var(--fg-faint); transition: background .12s, color .12s;
@@ -1037,7 +1053,7 @@ body[data-mode="panel"] .app.panel .table-wrap {
 .new-btn {
   display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 11px 0 8px;
   border-radius: 6px; background: var(--accent); color: var(--card); font-size: 12.5px; font-weight: 500;
-  transition: opacity .12s;
+  transition: opacity .12s; white-space: nowrap; flex: 0 0 auto;
 }
 .new-btn:hover { opacity: .85; }
 .new-btn svg { width: 14px; height: 14px; }
@@ -1046,7 +1062,7 @@ body[data-mode="panel"] .app.panel .table-wrap {
   display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 11px 0 8px;
   border-radius: 6px; border: 1px solid var(--line-strong); background: var(--card);
   color: var(--fg-soft); font-size: 12.5px; font-weight: 500;
-  transition: background .12s, color .12s, border-color .12s;
+  transition: background .12s, color .12s, border-color .12s; white-space: nowrap; flex: 0 0 auto;
 }
 .refresh-btn:hover { background: var(--hover); color: var(--fg); }
 .refresh-btn svg { width: 14px; height: 14px; }
@@ -1134,9 +1150,9 @@ html.dark .pos-trade .leg.sell { color: #4ade80; }
 .fp-leg { margin: 12px 0; }
 .fp-leg-title { font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--fg-soft); }
 .fp-leg-title .opt { font-weight: 400; color: var(--fg-faint); margin-left: 6px; }
-.ff-grid { display: grid; grid-template-columns: 1.1fr 1fr 1.2fr; gap: 8px; }
+.ff-grid { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 8px; align-items: center; }
 .ff-grid .ff-in { width: 100%; }
-.ff-grid .ff-in[type="date"] { font-size: 12px; color: var(--fg-soft); }
+.ff-grid .ff-in[type="date"], .sell-row .ff-in[type="date"] { font-size: 12px; color: var(--fg-soft); }
 .fp-err { min-height: 16px; font-size: 12px; color: var(--danger); margin: 2px 0 8px; }
 .fp-foot { display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
 .period-pair { display: inline-flex; align-items: center; gap: 8px; flex: 1 1 auto; }
@@ -1214,9 +1230,22 @@ html.dark .pos-trade .leg.sell { color: #4ade80; }
 /* ── 持仓表格 ── */
 .app.panel .table-wrap { flex: 1 1 auto; overflow: auto; }
 .table-wrap { overflow-x: auto; }
+.record-wrap { overflow-x: hidden; }
 .pos-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 /* 记录表：固定列宽按 colgroup 比例铺满窗口 */
-.pos-table-record { table-layout: fixed; }
+.pos-table-record { table-layout: fixed; min-width: 0; }
+.pos-table-record col.c-name { width: 11.2%; }
+.pos-table-record col.c-buy-date { width: 9.4%; }
+.pos-table-record col.c-buy-price { width: 7.5%; }
+.pos-table-record col.c-buy-qty { width: 6.5%; }
+.pos-table-record col.c-sell-date { width: 10.4%; }
+.pos-table-record col.c-sell-price { width: 8%; }
+.pos-table-record col.c-sell-qty { width: 6.5%; }
+.pos-table-record col.c-pnl { width: 9%; }
+.pos-table-record col.c-pnl-pct { width: 8%; }
+.pos-table-record col.c-status { width: 8%; }
+.pos-table-record col.c-current { width: 10%; }
+.pos-table-record col.c-ops { width: 5.5%; }
 .pos-table-record td, .pos-table-record th { overflow: hidden; text-overflow: ellipsis; }
 .pos-table thead th {
   position: sticky; top: 0; z-index: 1; background: var(--card);
@@ -1224,19 +1253,23 @@ html.dark .pos-trade .leg.sell { color: #4ade80; }
   padding: 6px 8px; border-bottom: 1px solid var(--line-strong); white-space: nowrap;
   user-select: none;
 }
+.pos-table-record thead th { padding-left: 6px; padding-right: 6px; text-align: left !important; }
 .pos-table th.num { text-align: right; }
 .pos-table th.th-sort { cursor: pointer; }
 .pos-table th.th-sort:hover { color: var(--fg-soft); }
 .pos-table th.on { color: var(--fg); }
-.pos-table th.th-ops { width: 52px; }
+.pos-table th.th-ops { width: 5.5%; }
+.pos-table th.trade-start, .pos-table td.trade-start { padding-left: 18px; }
+.pos-table-record th.trade-start, .pos-table-record td.trade-start { padding-left: 10px; }
 .pos-table tbody td {
   padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap;
   vertical-align: middle; color: var(--fg-soft);
 }
+.pos-table-record tbody td { padding-left: 6px; padding-right: 6px; text-align: left !important; }
 .pos-table tbody tr:hover td { background: var(--hover); }
 .pos-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .pos-table td.dim { color: var(--fg-faint); font-size: 12px; }
-.pos-table td.td-name { font-weight: 600; color: var(--fg); }
+.pos-table td.td-name { font-weight: 600; color: var(--fg); text-align: left; }
 .pos-table td.up { color: #D50000; font-weight: 600; }
 .pos-table td.down { color: #0B8043; font-weight: 600; }
 html.dark .pos-table td.up { color: #ff6b6b; }
@@ -1245,18 +1278,66 @@ html.dark .pos-table td.down { color: #4ade80; }
 .col-tags .tx-tag { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 10px; font-size: 11px; color: var(--fg-soft); background: var(--hover); margin: 1px 2px 1px 0; }
 .col-tags .tx-tag .dot { width: 7px; height: 7px; border-radius: 2px; }
 .pos-table tbody tr:hover .col-tags .tx-tag { background: var(--line); }
-.status-pill { font-size: 11px; padding: 1px 8px; border-radius: 10px; white-space: nowrap; }
-.status-pill.holding { color: var(--fg-soft); background: var(--hover); }
-.status-pill.closed { color: var(--fg-faint); background: none; padding-left: 0; }
-.td-ops { text-align: right; }
-.td-ops .tx-op { display: inline-flex; opacity: 0; pointer-events: none; transition: opacity .12s; }
-.pos-table tbody tr:hover .td-ops .tx-op { opacity: 1; pointer-events: auto; }
+.status-pill {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 50px; height: 21px; padding: 0 7px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.status-pill.holding { color: #1D4ED8; background: rgba(29, 78, 216, .10); }
+.status-pill.partial { color: #7C3AED; background: rgba(124, 58, 237, .11); }
+.status-pill.closed { color: var(--fg-faint); background: var(--hover); }
+.td-sells { white-space: normal !important; }
+.sell-lines { display: grid; gap: 2px; align-content: center; }
+.sell-lines span {
+  display: block; min-height: 18px; line-height: 18px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--fg-soft); font-size: 11.5px; text-align: left;
+}
+.sell-lines.num span { font-variant-numeric: tabular-nums; }
+.td-status { text-align: left !important; white-space: nowrap !important; }
+.current-price {
+  line-height: 1.2;
+  overflow: hidden !important;
+  text-overflow: clip !important;
+}
+.quote-price { display: inline; white-space: nowrap; }
+.quote-date {
+  display: inline; margin-left: 1px; color: var(--fg-faint);
+  font-size: 10.5px; font-weight: 400;
+}
+.td-ops {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  text-align: right !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+.td-ops .tx-op { display: inline-flex; visibility: hidden; opacity: 0; pointer-events: none; transition: opacity .12s; vertical-align: middle; }
+.pos-table-record .td-ops .tx-op { width: 18px; height: 22px; }
+.pos-table-record .td-ops .tx-op svg { width: 11px; height: 11px; }
+.pos-table tbody tr:hover .td-ops .tx-op { visibility: visible; opacity: 1; pointer-events: auto; }
+
+.sell-editor { display: flex; flex-direction: column; gap: 6px; }
+.sell-row {
+  display: grid; grid-template-columns: 1.15fr 1fr 1fr 28px; gap: 8px;
+  align-items: center;
+}
+.sell-row .ff-in { width: 100%; }
+.sell-row .tx-op { opacity: 1; pointer-events: auto; }
+.sell-add {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  height: 28px; margin-top: 7px; padding: 0 10px; border-radius: 6px;
+  color: var(--fg-soft); background: var(--hover); font-size: 12px;
+}
+.sell-add svg { width: 13px; height: 13px; }
+.sell-add:hover { color: var(--fg); background: var(--line); }
 
 /* 修复：标签下拉需浮在弹窗遮罩(z-index 200)之上，否则点了被盖住 */
 .cat-menu { z-index: 300; }
 
 /* ── 视图切换标签页 ── */
-.vtabs { display: inline-flex; gap: 2px; flex: 1 1 0%; min-width: 0; justify-content: flex-start; }
+.vtabs { display: inline-flex; gap: 2px; flex: 0 0 auto; min-width: max-content; justify-content: flex-start; white-space: nowrap; }
 .vtab {
   font-size: 14px; font-weight: 600; color: var(--fg-faint); padding: 2px 4px;
   border-bottom: 2px solid transparent; transition: color .12s; line-height: 1.6;
@@ -1363,12 +1444,13 @@ html.dark .pos-table td.down { color: #4ade80; }
 .idx-list.compact { gap: 4px; }
 .idx-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 6px;
   min-width: 0;
+  min-height: 24px;
 }
 .idx-item input[type="checkbox"] {
-  margin-top: 2px;
+  margin: 0;
 }
 .idx-item input[type="checkbox"],
 .idx-header input[type="checkbox"] {
@@ -1379,8 +1461,8 @@ html.dark .pos-table td.down { color: #4ade80; }
 }
 .idx-item label {
   display: inline-flex;
-  align-items: flex-start;
-  padding-top: 1px;
+  align-items: center;
+  padding-top: 0;
   gap: 5px;
   cursor: pointer;
   user-select: none;
@@ -1401,15 +1483,19 @@ html.dark .pos-table td.down { color: #4ade80; }
   box-shadow: 0 0 0 1px rgba(0,0,0,0.05);
 }
 .idx-item .idx-name {
-  white-space: normal;
-  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
   min-width: 0;
-  line-height: 1.3;
+  line-height: 1.2;
 }
 .series-item .series-del {
   flex: 0 0 auto;
   opacity: 0;
   pointer-events: none;
+  width: 22px;
+  height: 22px;
 }
 .series-item .tag-stock-remove {
   flex: 0 0 auto;
@@ -1417,6 +1503,8 @@ html.dark .pos-table td.down { color: #4ade80; }
   opacity: 0;
   pointer-events: none;
   transition: opacity .12s;
+  width: 22px;
+  height: 22px;
 }
 .series-item .series-refresh {
   flex: 0 0 auto;
@@ -1874,14 +1962,35 @@ body[data-mode="panel"] .stock-list-item .stock-name {
 }
 
 @media (max-width: 760px) {
-  .head { align-items: flex-start; flex-direction: column; }
-  .vtabs { flex: none; justify-content: flex-start; }
-  .head-actions { flex: none; width: 100%; justify-content: flex-start; }
-  .head-center { flex: none; width: 100%; justify-content: flex-start; margin: 4px 0; }
-  .top-fetch { width: 100%; flex-wrap: wrap; justify-content: flex-start; }
+  .head { gap: 8px; }
+  .head-center { margin: 0; }
+  .range-switch { gap: 2px; padding: 2px; }
+  .range-control { width: 96px; padding: 0 6px; }
+  .since-control { width: 96px; }
+  .pos-table-record col.c-name { width: 9.3%; }
+  .pos-table-record col.c-buy-date { width: 8%; }
+  .pos-table-record col.c-buy-price { width: 7.2%; }
+  .pos-table-record col.c-buy-qty { width: 6.5%; }
+  .pos-table-record col.c-sell-date { width: 9.3%; }
+  .pos-table-record col.c-sell-price { width: 7.5%; }
+  .pos-table-record col.c-sell-qty { width: 6.5%; }
+  .pos-table-record col.c-pnl { width: 8%; }
+  .pos-table-record col.c-pnl-pct { width: 7.2%; }
+  .pos-table-record col.c-status { width: 7.6%; }
+  .pos-table-record col.c-current { width: 15.4%; }
+  .pos-table-record col.c-ops { width: 7.5%; }
+  .top-fetch { width: 100%; flex-wrap: nowrap; justify-content: flex-end; }
   .top-fetch-in { flex: 1 1 150px; }
   .top-fetch-num { flex: 0 1 58px; }
   .top-fetch-unit { flex: 0 1 54px; }
+}
+
+@media (max-width: 600px) {
+  .head { gap: 6px; }
+  .range-control { width: 82px; padding: 0 5px; font-size: 11.5px; }
+  .since-control { width: 82px; }
+  .new-btn,
+  .refresh-btn { padding-left: 7px; padding-right: 9px; gap: 3px; }
 }
 
 /* ── 标签下拉菜单底部确认栏 ── */
@@ -1946,51 +2055,61 @@ body[data-mode="panel"] .stock-list-item .stock-name {
   margin-left: auto;
   margin-right: 4px;
   flex-shrink: 0;
+  height: 22px;
 }
-.series-item .tag-pick-btn {
+.series-item .compact-tag-pick {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+.series-item .compact-tag-pick .tag-pick-btn {
   min-width: unset;
+  width: 22px;
+  height: 22px;
   border: none;
   background: transparent;
-  padding: 0 4px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  justify-content: center;
+  gap: 0;
+  border-radius: 5px;
 }
-.series-item .tag-pick-btn .tag-pick-empty {
+.series-item .compact-tag-pick .tag-pick-btn:hover {
+  background: var(--hover);
+}
+.series-item .compact-tag-pick .tag-pick-btn .tag-pick-empty {
   display: none;
 }
-.series-item .tag-pick-btn::before {
+.series-item .compact-tag-pick .tag-pick-btn::before {
   content: "";
   display: inline-block;
-  width: 12px;
-  height: 12px;
+  width: 13px;
+  height: 13px;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239b9a97' stroke-width='2' stroke-linecap='round'><path d='M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z'/><line x1='7' y1='7' x2='7.01' y2='7'/></svg>");
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
 }
-.series-item.has-tags .tag-pick-btn::before {
+.series-item.has-tags .compact-tag-pick .tag-pick-btn::before {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%239b9a97'><path d='M20.59 10.59 12 2H2v10l8.59 8.59a2 2 0 0 0 2.82 0l7.18-7.18a2 2 0 0 0 0-2.82ZM7 8.25A1.25 1.25 0 1 1 7 5.75a1.25 1.25 0 0 1 0 2.5Z'/></svg>");
 }
-.series-item .tag-pick-btn:has(.dot)::before {
+.series-item .compact-tag-pick .tag-pick-btn:has(.dot)::before {
   display: none;
 }
-.series-item .tag-pick-btn .tag-pick-names,
-.series-item .tag-pick-btn span:last-child {
+.series-item .compact-tag-pick .tag-pick-btn .tag-pick-names,
+.series-item .compact-tag-pick .tag-pick-btn span:last-child {
   display: none;
 }
 
 /* ── 顶栏中间容器 ── */
 .head-center {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   justify-content: center;
   align-items: center;
-}
-
-/* ── 其它列宽微调 ── */
-.pos-table th.th-ops {
-  width: 68px !important;
+  overflow: hidden;
 }
 
 .fd-tag-mgr-btn {

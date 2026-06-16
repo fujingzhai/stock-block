@@ -424,7 +424,7 @@ export function renderMarketHub(host: HTMLElement, store: StockStore, fit: () =>
             container.appendChild(tagPicker(store, sTags, (ids) => {
               row.classList.toggle("has-tags", ids.length > 0);
               void store.setSeriesTags(kind, code, ids);
-            }, { noColor: true }));
+            }, { noColor: true, compact: true }));
           }
         });
       }

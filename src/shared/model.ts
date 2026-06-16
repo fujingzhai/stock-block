@@ -8,6 +8,13 @@ export interface Tag {
 }
 
 /** 一条记录 = 一只股票的一轮交易（买入 + 可选卖出） */
+export interface SellLeg {
+  id: string;
+  date: string;
+  price: number;
+  qty: number;
+}
+
 export interface Position {
   id: string;
   /** 股票名称（必填） */
@@ -18,7 +25,9 @@ export interface Position {
   buyDate: string;
   buyPrice: number;
   buyQty: number;
-  /** 卖出：留空表示仍持有 */
+  /** 分批卖出；旧数据会从 sellDate/sellPrice/sellQty 自动迁移 */
+  sells?: SellLeg[];
+  /** 旧版卖出字段：留作向后兼容 */
   sellDate?: string;
   sellPrice?: number;
   sellQty?: number;
@@ -147,29 +156,64 @@ export function marketOf(code: string): "sh" | "sz" {
 }
 
 // ── 持仓计算 ──────────────────────────────────────────
-/** 是否已清仓（已录入卖出价与卖出日期） */
+/** 规范化后的卖出记录，兼容旧版单次卖出字段 */
+export function sellLegs(p: Position): SellLeg[] {
+  if (Array.isArray(p.sells)) {
+    return p.sells
+      .filter((s) => !!s.date && Number.isFinite(s.price) && Number.isFinite(s.qty) && s.price > 0 && s.qty > 0)
+      .map((s, idx) => ({ ...s, id: s.id || `${p.id || "sell"}-${s.date}-${idx}` }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }
+  if (p.sellDate && p.sellPrice != null && Number.isFinite(p.sellPrice)) {
+    const qty = p.sellQty != null && Number.isFinite(p.sellQty) ? p.sellQty : p.buyQty;
+    return qty > 0 ? [{ id: `${p.id || "sell"}-legacy`, date: p.sellDate, price: p.sellPrice, qty }] : [];
+  }
+  return [];
+}
+/** 是否已录入有效卖出信息 */
+export function hasSell(p: Position): boolean {
+  return sellLegs(p).length > 0;
+}
+/** 实际卖出股数合计 */
+export function effSellQty(p: Position): number {
+  return sellLegs(p).reduce((sum, s) => sum + s.qty, 0);
+}
+/** 剩余持有股数 */
+export function remainingQty(p: Position): number {
+  return Math.max(0, p.buyQty - effSellQty(p));
+}
+/** 是否已清仓：有效卖出数量覆盖全部买入数量 */
 export function isClosed(p: Position): boolean {
-  return !!p.sellDate && p.sellPrice != null && Number.isFinite(p.sellPrice);
+  return hasSell(p) && remainingQty(p) <= 0;
 }
 /** 买入成本额 */
 export function cost(p: Position): number {
   return p.buyPrice * p.buyQty;
 }
-/** 实际卖出股数：未填则按买入股数（一买一卖整轮） */
-export function effSellQty(p: Position): number {
-  return p.sellQty != null && Number.isFinite(p.sellQty) ? p.sellQty : p.buyQty;
+/** 最后一笔卖出日期；未卖出返回空字符串 */
+export function lastSellDate(p: Position): string {
+  const legs = sellLegs(p);
+  return legs.length ? legs[legs.length - 1].date : "";
+}
+/** 最后一笔卖出价；未卖出返回 null */
+export function lastSellPrice(p: Position): number | null {
+  const legs = sellLegs(p);
+  return legs.length ? legs[legs.length - 1].price : null;
+}
+/** 已实现盈亏 */
+export function realizedPnl(p: Position): number {
+  return sellLegs(p).reduce((sum, s) => sum + (s.price - p.buyPrice) * s.qty, 0);
 }
 /** 已实现盈亏；未清仓返回 null（浮动盈亏需当前价，留待行情视图） */
 export function pnl(p: Position): { amount: number; pct: number } | null {
   if (!isClosed(p)) return null;
-  const sp = p.sellPrice as number;
-  const amount = (sp - p.buyPrice) * effSellQty(p);
-  const pct = p.buyPrice ? sp / p.buyPrice - 1 : 0;
+  const amount = realizedPnl(p);
+  const pct = cost(p) ? amount / cost(p) : 0;
   return { amount, pct };
 }
 /** 该记录用于排序的"最近活动日"：卖出日优先，否则买入日 */
 export function activeDate(p: Position): string {
-  return p.sellDate || p.buyDate || "";
+  return lastSellDate(p) || p.buyDate || "";
 }
 
 // ── 日期 ──────────────────────────────────────────────
@@ -187,7 +231,7 @@ export function parseDate(s: string): Date {
 /** 持有天数：(卖出日或今天) − 买入日 */
 export function holdDays(p: Position): number {
   if (!p.buyDate) return 0;
-  const end = p.sellDate ? parseDate(p.sellDate) : new Date();
+  const end = isClosed(p) && lastSellDate(p) ? parseDate(lastSellDate(p)) : new Date();
   const ms = end.getTime() - parseDate(p.buyDate).getTime();
   return Math.max(0, Math.round(ms / 86400000));
 }

@@ -2,15 +2,21 @@ import { StockStore } from "../../shared/store";
 import {
   PALETTE,
   Position,
-  activeDate,
+  SellLeg,
   fmtNum,
   fmtPct,
   fmtPrice,
   fmtSigned,
-  holdDays,
   isClosed,
   isHexColor,
   effSellQty,
+  genId,
+  hasSell,
+  lastSellDate,
+  lastSellPrice,
+  realizedPnl,
+  remainingQty,
+  sellLegs,
   todayStr
 } from "../../shared/model";
 import { setWidgetHeight } from "../theme";
@@ -38,9 +44,7 @@ interface FormResult {
   buyDate: string;
   buyPrice: number;
   buyQty: number;
-  sellDate?: string;
-  sellPrice?: number;
-  sellQty?: number;
+  sells: SellLeg[];
 }
 
 const num = (s: string): number | null => {
@@ -82,29 +86,62 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
     setWidgetHeight(h);
   }
 
+  // 兜底：内容尺寸变化（任何视图新增行、异步加载的图表/字体等）时自动重新适配挂件高度，
+  // 避免内容长高后没有重新撑开挂件、出现内部滚动槽。面板模式下 fit() 会自行 return，无副作用。
+  if (!panel && typeof ResizeObserver !== "undefined") {
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(fit);
+    });
+    ro.observe(root);
+  }
+
   // 表格列（可排序）；标签与操作列另行渲染，不参与排序
-  type ColKey = "name" | "buyDate" | "buyPrice" | "qty" | "status" | "sellPrice" | "pnl" | "pnlPct";
+  type ColKey = "name" | "buyDate" | "buyPrice" | "qty" | "sellDate" | "sellPrice" | "sellQty" | "currentPrice" | "pnl" | "pnlPct" | "status";
   let sortKey: ColKey = "buyDate";
   let sortDir: "asc" | "desc" = "desc";
 
-  function getLatestPrice(name: string): number | null {
+  function getLatestQuote(name: string): { price: number; date?: string } | null {
     const stock = store.individualStocks.find((s) => s.name === name);
     if (!stock?.klines?.length) return null;
-    return stock.klines[stock.klines.length - 1].close;
+    const latest = stock.klines[stock.klines.length - 1];
+    return { price: latest.close, date: latest.date };
   }
 
-  function calcPnl(p: Position): { amount: number; pct: number } | null {
-    if (isClosed(p)) {
-      const sp = p.sellPrice as number;
-      const amount = (sp - p.buyPrice) * effSellQty(p);
-      const pct = p.buyPrice ? sp / p.buyPrice - 1 : 0;
-      return { amount, pct };
+  function getLatestPrice(name: string): number | null {
+    return getLatestQuote(name)?.price ?? null;
+  }
+
+  function quoteDateLabel(date?: string): string {
+    if (!date) return "";
+    const m = date.match(/^\d{4}-(\d{2})-(\d{2})$/);
+    return m ? `${m[1]}-${m[2]}` : date;
+  }
+
+  function calcPnl(p: Position): { amount: number; pct: number; complete: boolean; realized: number; floating: number | null } | null {
+    const leftQty = remainingQty(p);
+    const realized = realizedPnl(p);
+    if (leftQty <= 0) {
+      const amount = realized;
+      const pct = p.buyPrice && p.buyQty ? amount / (p.buyPrice * p.buyQty) : 0;
+      return { amount, pct, complete: true, realized, floating: 0 };
     }
     const currentPrice = getLatestPrice(p.name);
-    if (currentPrice == null) return null;
-    const amount = (currentPrice - p.buyPrice) * p.buyQty;
-    const pct = p.buyPrice ? currentPrice / p.buyPrice - 1 : 0;
-    return { amount, pct };
+    if (currentPrice == null) {
+      if (!hasSell(p)) return null;
+      const pct = p.buyPrice && p.buyQty ? realized / (p.buyPrice * p.buyQty) : 0;
+      return { amount: realized, pct, complete: false, realized, floating: null };
+    }
+    const floating = (currentPrice - p.buyPrice) * leftQty;
+    const amount = realized + floating;
+    const pct = p.buyPrice && p.buyQty ? amount / (p.buyPrice * p.buyQty) : 0;
+    return { amount, pct, complete: true, realized, floating };
+  }
+
+  function statusRank(p: Position): number {
+    if (isClosed(p)) return 2;
+    return hasSell(p) ? 1 : 0;
   }
 
   function valOf(p: Position, key: ColKey): number | string {
@@ -113,16 +150,29 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
       case "buyDate": return p.buyDate || "";
       case "buyPrice": return p.buyPrice;
       case "qty": return p.buyQty;
-      case "status": return isClosed(p) ? 1 : 0;
-      case "sellPrice": return isClosed(p) ? (p.sellPrice ?? -1) : (getLatestPrice(p.name) ?? -1);
+      case "sellDate": return lastSellDate(p) || "";
+      case "sellPrice": return lastSellPrice(p) ?? -1;
+      case "sellQty": return effSellQty(p);
+      case "currentPrice": return getLatestPrice(p.name) ?? -1;
       case "pnl": return calcPnl(p)?.amount ?? -Infinity;
       case "pnlPct": return calcPnl(p)?.pct ?? -Infinity;
+      case "status": return statusRank(p);
     }
   }
 
   function sortPositions(): Position[] {
     const sign = sortDir === "asc" ? 1 : -1;
     return [...store.positions].sort((a, b) => {
+      if (sortKey === "sellDate") {
+        const ad = lastSellDate(a);
+        const bd = lastSellDate(b);
+        if (!ad && !bd) return (a.created || 0) - (b.created || 0);
+        if (!ad) return sortDir === "asc" ? 1 : -1;
+        if (!bd) return sortDir === "asc" ? -1 : 1;
+        const dc = ad.localeCompare(bd);
+        if (dc !== 0) return dc * sign;
+        return ((a.created || 0) - (b.created || 0)) * sign;
+      }
       const av = valOf(a, sortKey), bv = valOf(b, sortKey);
       let c: number;
       if (typeof av === "number" && typeof bv === "number") c = av - bv;
@@ -527,7 +577,7 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
     if (headCenter) {
       headCenter.innerHTML = `<span class="position-summary">持仓 ${holding} 笔，清仓 ${closed.length} 笔，总盈亏 <b class="${pnlCls}">${fmtSigned(totalPnl)}</b>，<b class="${pnlCls}">${fmtPct(totalPct)}</b></span>`;
     }
-    body.innerHTML = `<div class="table-wrap" id="tableWrap"></div>`;
+    body.innerHTML = `<div class="table-wrap record-wrap" id="tableWrap"></div>`;
     const wrap = body.querySelector("#tableWrap") as HTMLElement;
     if (!store.positions.length) {
       wrap.innerHTML = `<div class="empty">还没有持仓，点右上「新建」记一只</div>`;
@@ -539,14 +589,22 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
   function buildTable(): HTMLElement {
     const headers: Array<{ k?: ColKey; label: string; num?: boolean; cls?: string }> = [
       { k: "name", label: "股票" },
-      { k: "buyDate", label: "买入时间" },
+      { k: "buyDate", label: "买入" },
       { k: "buyPrice", label: "成本", num: true },
-      { k: "qty", label: "数量", num: true },
-      { k: "status", label: "状态" },
-      { k: "sellPrice", label: "卖价/现价", num: true },
+      { k: "qty", label: "买入量", num: true },
+      { k: "sellDate", label: "卖出", cls: "trade-start" },
+      { k: "sellPrice", label: "卖价", num: true },
+      { k: "sellQty", label: "卖出量", num: true },
       { k: "pnl", label: "盈亏", num: true },
-      { k: "pnlPct", label: "盈亏%", num: true }
+      { k: "pnlPct", label: "盈亏%", num: true },
+      { k: "status", label: "状态" },
+      { k: "currentPrice", label: "现价", num: true }
     ];
+    const colHtml = [
+      "c-name", "c-buy-date", "c-buy-price", "c-buy-qty",
+      "c-sell-date", "c-sell-price", "c-sell-qty",
+      "c-pnl", "c-pnl-pct", "c-status", "c-current", "c-ops"
+    ].map((c) => `<col class="${c}">`).join("");
     const arrow = (k: ColKey) => (sortKey === k ? (sortDir === "asc" ? " ▲" : " ▼") : "");
     const thHtml = headers.map((h) => {
       const cls = [h.num ? "num" : "", h.cls || "", h.k ? "th-sort" : "", h.k && sortKey === h.k ? "on" : ""].filter(Boolean).join(" ");
@@ -555,8 +613,8 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
     }).join("");
 
     const table = document.createElement("table");
-    table.className = "pos-table";
-    table.innerHTML = `<thead><tr>${thHtml}<th class="th-ops"></th></tr></thead><tbody></tbody>`;
+    table.className = "pos-table pos-table-record";
+    table.innerHTML = `<colgroup>${colHtml}</colgroup><thead><tr>${thHtml}<th class="th-ops"></th></tr></thead><tbody></tbody>`;
 
     const tbody = table.querySelector("tbody") as HTMLElement;
     for (const p of sortPositions()) tbody.appendChild(buildRow(p));
@@ -575,25 +633,45 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
 
   function buildRow(p: Position): HTMLElement {
     const closed = isClosed(p);
+    const sells = sellLegs(p);
     const pl = calcPnl(p);
     const pnlCls = pl ? (pl.amount > 0 ? "up" : pl.amount < 0 ? "down" : "") : "";
-    const currentPrice = closed ? null : getLatestPrice(p.name);
-    const priceDisplay = closed
-      ? fmtPrice(p.sellPrice as number)
-      : currentPrice != null ? fmtPrice(currentPrice) : "—";
+    const quote = getLatestQuote(p.name);
+    const currentPrice = quote?.price ?? null;
     const statusDisplay = closed
-      ? `<span class="dim">${esc(p.sellDate as string)}</span> 清仓`
-      : "持有中";
+      ? `<span class="status-pill closed">清仓</span>`
+      : hasSell(p)
+        ? `<span class="status-pill partial">部分卖出</span>`
+        : `<span class="status-pill holding">持有</span>`;
+    const sellDatesDisplay = sells.length
+      ? `<div class="sell-lines">${sells.map((s) => `<span>${esc(s.date)}</span>`).join("")}</div>`
+      : `<span class="dim">—</span>`;
+    const sellPricesDisplay = sells.length
+      ? `<div class="sell-lines num">${sells.map((s) => `<span>${fmtPrice(s.price)}</span>`).join("")}</div>`
+      : `<span class="dim">—</span>`;
+    const sellQtyDisplay = sells.length
+      ? `<div class="sell-lines num">${sells.map((s) => `<span>${fmtNum(s.qty)}</span>`).join("")}</div>`
+      : `<span class="dim">—</span>`;
+    const currentDisplay = currentPrice != null
+      ? `<span class="quote-price">${fmtPrice(currentPrice)}${quote?.date ? `<span class="quote-date">（${esc(quoteDateLabel(quote.date))}）</span>` : ""}</span>`
+      : `<span class="dim">—</span>`;
+    const pnlDisplay = pl
+      ? fmtSigned(pl.amount)
+      : "—";
+    const pctDisplay = pl ? fmtPct(pl.pct) : "—";
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td class="td-name">${esc(p.name)}</td>
       <td class="dim">${esc(p.buyDate)}</td>
       <td class="num">${fmtPrice(p.buyPrice)}</td>
       <td class="num">${fmtNum(p.buyQty)}</td>
-      <td>${statusDisplay}</td>
-      <td class="num">${priceDisplay}</td>
-      <td class="num ${pnlCls}">${pl ? fmtSigned(pl.amount) : "—"}</td>
-      <td class="num ${pnlCls}">${pl ? fmtPct(pl.pct) : "—"}</td>
+      <td class="td-sells trade-start">${sellDatesDisplay}</td>
+      <td class="td-sells num">${sellPricesDisplay}</td>
+      <td class="td-sells num">${sellQtyDisplay}</td>
+      <td class="num ${pnlCls}">${pnlDisplay}</td>
+      <td class="num ${pnlCls}">${pctDisplay}</td>
+      <td class="td-status">${statusDisplay}</td>
+      <td class="num current-price">${currentDisplay}</td>
       <td class="td-ops">
         <button class="tx-op" title="编辑">${ICONS.edit}</button>
         <button class="tx-op del" title="删除">${ICONS.del}</button>
@@ -625,12 +703,9 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
         </div>
       </div>
       <div class="fp-leg">
-        <div class="fp-leg-title sell">卖出 <span class="opt">留空 = 仍持有</span></div>
-        <div class="ff-grid">
-          <input id="sDate" class="ff-in" type="date" />
-          <input id="sPrice" class="ff-in" inputmode="decimal" placeholder="价格" />
-          <input id="sQty" class="ff-in" inputmode="numeric" placeholder="数量（默认同买入）" />
-        </div>
+        <div class="fp-leg-title sell">卖出</div>
+        <div class="sell-editor" id="sellEditor"></div>
+        <button class="sell-add" id="addSell" type="button">${ICONS.plus}<span>添加卖出</span></button>
       </div>
       <div class="fp-err" id="fErr"></div>
       <div class="fp-foot">
@@ -646,21 +721,60 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
     $("fpClose").addEventListener("click", close);
     $("fCancel").addEventListener("click", close);
 
+    let sellDrafts: SellLeg[] = edit ? sellLegs(edit).map((s) => ({ ...s })) : [];
+
     // 初值
     ($("fName") as HTMLInputElement).value = edit?.name || "";
     ($("bDate") as HTMLInputElement).value = edit?.buyDate || todayStr();
     if (edit) {
       ($("bPrice") as HTMLInputElement).value = String(edit.buyPrice);
       ($("bQty") as HTMLInputElement).value = String(edit.buyQty);
-      if (edit.sellDate) ($("sDate") as HTMLInputElement).value = edit.sellDate;
-      if (edit.sellPrice != null) ($("sPrice") as HTMLInputElement).value = String(edit.sellPrice);
-      if (edit.sellQty != null) ($("sQty") as HTMLInputElement).value = String(edit.sellQty);
     }
 
     const err = (msg: string, focusId?: string) => {
       $("fErr").textContent = msg;
       if (focusId) ($(focusId) as HTMLInputElement).focus();
     };
+
+    const syncSellDrafts = () => {
+      sellDrafts = Array.from(mask.querySelectorAll<HTMLElement>(".sell-row")).map((row) => ({
+        id: row.dataset.id || genId(),
+        date: (row.querySelector(".sell-date") as HTMLInputElement).value,
+        price: num((row.querySelector(".sell-price") as HTMLInputElement).value) || 0,
+        qty: num((row.querySelector(".sell-qty") as HTMLInputElement).value) || 0
+      }));
+    };
+
+    const renderSellRows = () => {
+      const editor = $("sellEditor");
+      if (!sellDrafts.length) {
+        editor.innerHTML = "";
+        return;
+      }
+      editor.innerHTML = sellDrafts.map((s) => `
+        <div class="sell-row" data-id="${esc(s.id)}">
+          <input class="ff-in sell-date" type="date" value="${esc(s.date)}" />
+          <input class="ff-in sell-price" inputmode="decimal" placeholder="卖价" value="${s.price ? esc(String(s.price)) : ""}" />
+          <input class="ff-in sell-qty" inputmode="numeric" placeholder="数量" value="${s.qty ? esc(String(s.qty)) : ""}" />
+          <button class="tx-op del sell-remove" title="删除">${ICONS.del}</button>
+        </div>
+      `).join("");
+      editor.querySelectorAll<HTMLButtonElement>(".sell-remove").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          syncSellDrafts();
+          const id = (btn.closest(".sell-row") as HTMLElement).dataset.id;
+          sellDrafts = sellDrafts.filter((s) => s.id !== id);
+          renderSellRows();
+        });
+      });
+    };
+
+    $("addSell").addEventListener("click", () => {
+      syncSellDrafts();
+      sellDrafts.push({ id: genId(), date: todayStr(), price: 0, qty: remainingQty({ id: edit?.id || "draft", name: "", tagIds: [], buyDate: ($("bDate") as HTMLInputElement).value || todayStr(), buyPrice: num(($("bPrice") as HTMLInputElement).value) || 0, buyQty: num(($("bQty") as HTMLInputElement).value) || 0, sells: sellDrafts, created: edit?.created || Date.now() }) || 0 });
+      renderSellRows();
+    });
+    renderSellRows();
 
     const collect = (): FormResult | null => {
       const name = ($("fName") as HTMLInputElement).value.trim();
@@ -671,21 +785,28 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
       if (buyPrice == null || buyPrice <= 0) { err("买入价格不正确", "bPrice"); return null; }
       if (buyQty == null || buyQty <= 0) { err("买入数量不正确", "bQty"); return null; }
 
-      const sDate = ($("sDate") as HTMLInputElement).value;
-      const sPrice = num(($("sPrice") as HTMLInputElement).value);
-      const sQtyRaw = num(($("sQty") as HTMLInputElement).value);
-      const hasSell = !!sDate || sPrice != null || sQtyRaw != null;
+      syncSellDrafts();
       const res: FormResult = {
         name, tagIds: [],
-        buyDate, buyPrice: Math.round(buyPrice * 1000) / 1000, buyQty: Math.round(buyQty * 100) / 100
+        buyDate, buyPrice: Math.round(buyPrice * 1000) / 1000, buyQty: Math.round(buyQty * 100) / 100,
+        sells: []
       };
-      if (hasSell) {
-        if (!sDate) { err("已填卖出，请补卖出日期", "sDate"); return null; }
-        if (sPrice == null || sPrice <= 0) { err("卖出价格不正确", "sPrice"); return null; }
-        res.sellDate = sDate;
-        res.sellPrice = Math.round(sPrice * 1000) / 1000;
-        if (sQtyRaw != null && sQtyRaw > 0) res.sellQty = Math.round(sQtyRaw * 100) / 100;
+      let totalSellQty = 0;
+      for (const s of sellDrafts) {
+        if (!s.date && !s.price && !s.qty) continue;
+        if (!s.date) { err("卖出记录缺少日期"); return null; }
+        if (!s.price || s.price <= 0) { err("卖出价格不正确"); return null; }
+        if (!s.qty || s.qty <= 0) { err("卖出数量不正确"); return null; }
+        totalSellQty += s.qty;
+        if (totalSellQty > res.buyQty + 0.000001) { err("卖出数量合计不能超过买入数量"); return null; }
+        res.sells.push({
+          id: s.id || genId(),
+          date: s.date,
+          price: Math.round(s.price * 1000) / 1000,
+          qty: Math.round(s.qty * 100) / 100
+        });
       }
+      res.sells.sort((a, b) => a.date.localeCompare(b.date));
       return res;
     };
 
@@ -693,7 +814,7 @@ export function mountStockApp(root: HTMLElement, store: StockStore, opts: AppOpt
       const v = collect();
       if (!v) return;
       if (edit) {
-        await store.updatePos(edit.id, { ...v, sellDate: v.sellDate, sellPrice: v.sellPrice, sellQty: v.sellQty });
+        await store.updatePos(edit.id, { ...v, sellDate: undefined, sellPrice: undefined, sellQty: undefined });
       } else {
         await store.addPos(v);
       }

@@ -1,5 +1,5 @@
 import { readWorkspaceFile, writeWorkspaceFile } from "./api";
-import { Tag, StockData, Position, Fundamental, StockKline, MarketKline, MarketKind, defaultData, genId, normalizeColor, SortKey, SortDir } from "./model";
+import { Tag, StockData, Position, Fundamental, StockKline, MarketKline, MarketKind, defaultData, genId, normalizeColor, SortKey, SortDir, SellLeg } from "./model";
 
 const FILE = "/data/storage/stock-block/data.json";
 const BAK_FILE = "/data/storage/stock-block/data.json.bak";
@@ -407,6 +407,7 @@ export class StockStore {
     for (const pos of this.data.positions) {
       if (!Array.isArray(pos.tagIds)) pos.tagIds = [];
       pos.tagIds = pos.tagIds.filter((id) => ids.has(id));
+      pos.sells = this.normalizeSells(pos);
     }
     for (const s of this.data.individualStocks) {
       if (!Array.isArray(s.tagIds)) s.tagIds = [];
@@ -451,6 +452,24 @@ export class StockStore {
       }
     }
     return Array.from(best.values());
+  }
+
+  private normalizeSells(pos: Position): SellLeg[] {
+    const raw = Array.isArray(pos.sells) ? pos.sells : [];
+    const fromLegacy = !raw.length && pos.sellDate && pos.sellPrice != null && Number.isFinite(pos.sellPrice)
+      ? [{ id: genId(), date: pos.sellDate, price: pos.sellPrice, qty: pos.sellQty != null && Number.isFinite(pos.sellQty) ? pos.sellQty : pos.buyQty }]
+      : [];
+    let used = 0;
+    return [...raw, ...fromLegacy]
+      .filter((s) => !!s.date && Number.isFinite(s.price) && Number.isFinite(s.qty) && s.price > 0 && s.qty > 0)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((s) => {
+        const left = Math.max(0, pos.buyQty - used);
+        const qty = Math.min(Math.round(s.qty * 100) / 100, left);
+        used += qty;
+        return { id: s.id || genId(), date: s.date, price: Math.round(s.price * 1000) / 1000, qty };
+      })
+      .filter((s) => s.qty > 0);
   }
 
   private rememberTags(tagIds: string[]): void {

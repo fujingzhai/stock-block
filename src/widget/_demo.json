@@ -8,8 +8,13 @@
   ],
   "positions": [
     { "id": "p1", "name": "浪潮信息", "tagIds": ["t1"], "buyDate": "2026-03-10", "buyPrice": 52.3, "buyQty": 200, "sellDate": "2026-04-13", "sellPrice": 48.6, "sellQty": 200, "created": 1000 },
-    { "id": "p2", "name": "中大力德", "tagIds": ["t2"], "buyDate": "2026-04-16", "buyPrice": 33.8, "buyQty": 300, "sellDate": "2026-05-26", "sellPrice": 39.2, "sellQty": 300, "created": 2000 },
+    { "id": "p2", "name": "中大力德", "tagIds": ["t2"], "buyDate": "2026-04-16", "buyPrice": 33.8, "buyQty": 300, "sells": [{ "id": "s1", "date": "2026-05-26", "price": 39.2, "qty": 100 }], "created": 2000 },
+    { "id": "p4", "name": "卧龙电驱", "tagIds": ["t2"], "buyDate": "2026-04-22", "buyPrice": 28.4, "buyQty": 300, "sells": [{ "id": "s2", "date": "2026-05-20", "price": 32.1, "qty": 100 }, { "id": "s3", "date": "2026-06-08", "price": 35.6, "qty": 200 }], "created": 2500 },
     { "id": "p3", "name": "拓维信息", "tagIds": ["t1", "t3"], "buyDate": "2026-05-27", "buyPrice": 21.5, "buyQty": 500, "created": 3000 }
+  ],
+  "individualStocks": [
+    { "code": "000977", "name": "浪潮信息", "timeframe": "1Y", "klines": [{ "date": "2026-06-15", "close": 50.2 }], "fetchedAt": 1781539200000, "tagIds": ["t1"] },
+    { "code": "002261", "name": "拓维信息", "timeframe": "1Y", "klines": [{ "date": "2026-06-15", "close": 23.6 }], "fetchedAt": 1781539200000, "tagIds": ["t1", "t3"] }
   ],
   "lastTagIds": ["t1"],
   "sortBy": "active",

@@ -1,6 +1,6 @@
 {
   "name": "stock-block",
-  "version": "0.2.0",
+  "version": "0.3.4",
   "description": "A SiYuan plugin for embedding a unified stock block (records, fundamentals, normalized trend comparison) in documents.",
   "repository": "https://github.com/fujingzhai/stock-block",
   "homepage": "",
