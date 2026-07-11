@@ -10,9 +10,33 @@ function hostIsDark(): boolean {
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
 }
 
+/**
+ * 把宿主思源的实际主题背景复制进 iframe。
+ * 不再依赖透明 iframe 与父页合成，避免 Electron 回落成白色画布。
+ */
+function syncHostCanvas(): void {
+  let canvas = "";
+  try {
+    if (window.parent === window) throw new Error("standalone");
+    const pdoc = window.parent.document;
+    const rootStyle = window.parent.getComputedStyle(pdoc.documentElement);
+    const bodyStyle = window.parent.getComputedStyle(pdoc.body);
+    canvas = rootStyle.getPropertyValue("--b3-theme-background").trim()
+      || bodyStyle.backgroundColor;
+    if (canvas === "transparent" || canvas === "rgba(0, 0, 0, 0)") canvas = "";
+  } catch {
+    // 非同源（独立调试）时使用内置明暗底色
+  }
+  document.documentElement.style.setProperty(
+    "--canvas",
+    canvas || (hostIsDark() ? "#202020" : "#ffffff")
+  );
+}
+
 /** 跟随宿主思源的明暗主题与字体；独立打开时按系统配色兜底 */
 export function syncTheme(): void {
   document.documentElement.classList.toggle("dark", hostIsDark());
+  syncHostCanvas();
   try {
     const pdoc = window.parent.document;
     const pstyle = window.parent.getComputedStyle(pdoc.body);
@@ -54,7 +78,8 @@ export function setWidgetHeight(px: number): void {
     if (!frame) return;
     frame.style.height = `${px}px`;
     const blockEl = frame.closest("[data-node-id]") as HTMLElement | null;
-    if (blockEl) blockEl.style.height = `${px}px`;
+    const blockId = blockEl?.getAttribute("data-node-id") || "";
+    if (/^\d{14}-[a-z0-9]{7}$/.test(blockId)) blockEl!.style.height = `${px}px`;
   } catch {
     // 忽略
   }

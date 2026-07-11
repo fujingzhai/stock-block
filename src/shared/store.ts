@@ -3,6 +3,8 @@ import { Tag, StockData, Position, Fundamental, StockKline, MarketKline, MarketK
 
 const FILE = "/data/storage/stock-block/data.json";
 const BAK_FILE = "/data/storage/stock-block/data.json.bak";
+const KLINES_FILE = "/data/storage/stock-block/klines.json";
+const MARKET_FILE = "/data/storage/stock-block/market.json";
 const UNDO_LIMIT = 50;
 const CHANNEL = "stock-block";
 
@@ -60,6 +62,7 @@ export class StockStore {
         throw new Error("缺少必要字段");
       }
       this.data = parsed;
+      await this.loadSidecarData();
       if (!this.data.sortBy) this.data.sortBy = "active";
       if (!this.data.sortOrder) this.data.sortOrder = "desc";
       this.normalize();
@@ -69,6 +72,34 @@ export class StockStore {
     } catch {
       this.loadFailed = true;
       throw new Error("股票数据解析失败，已禁止保存以防覆盖（可检查 data/storage/stock-block/data.json）");
+    }
+  }
+
+  private async loadSidecarData(): Promise<void> {
+    const [klinesText, marketText] = await Promise.all([
+      readWorkspaceFile(KLINES_FILE).catch(() => null),
+      readWorkspaceFile(MARKET_FILE).catch(() => null)
+    ]);
+
+    const sidecarStocks = this.parseSidecar<StockKline>(klinesText, "individualStocks");
+    if (sidecarStocks.length) {
+      this.data.individualStocks = this.dedupStocks([...(this.data.individualStocks || []), ...sidecarStocks]);
+    }
+
+    const sidecarMarket = this.parseSidecar<MarketKline>(marketText, "marketSeries");
+    if (sidecarMarket.length) {
+      this.data.marketSeries = this.dedupMarketSeries([...(this.data.marketSeries || []), ...sidecarMarket]);
+    }
+  }
+
+  private parseSidecar<T>(text: string | null, key: "individualStocks" | "marketSeries"): T[] {
+    if (!text) return [];
+    try {
+      const parsed = JSON.parse(text) as Partial<Record<typeof key, T[]>>;
+      const list = parsed?.[key];
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
     }
   }
 
@@ -515,6 +546,7 @@ export class StockStore {
         }
       }
       await writeWorkspaceFile(FILE, text);
+      await this.persistSidecars();
       this.lastGoodText = text;
       this.fileExisted = true;
     };
@@ -523,6 +555,21 @@ export class StockStore {
     this.persistLock = task.then(() => undefined, () => undefined);
     await task;
     this.channel?.postMessage("changed");
+  }
+
+  private async persistSidecars(): Promise<void> {
+    await Promise.all([
+      writeWorkspaceFile(KLINES_FILE, JSON.stringify({
+        version: this.data.version,
+        updated: this.data.updated,
+        individualStocks: this.data.individualStocks || []
+      }, null, 2)),
+      writeWorkspaceFile(MARKET_FILE, JSON.stringify({
+        version: this.data.version,
+        updated: this.data.updated,
+        marketSeries: this.data.marketSeries || []
+      }, null, 2))
+    ]);
   }
 }
 

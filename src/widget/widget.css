@@ -1,4 +1,5 @@
 :root {
+  --canvas: #ffffff;
   --fg: #37352f;
   --fg-soft: #787774;
   --fg-faint: #9b9a97;
@@ -15,6 +16,7 @@
   --danger: #e03e3e;
 }
 html.dark {
+  --canvas: #202020;
   --fg: rgba(255, 255, 255, 0.90);
   --fg-soft: rgba(255, 255, 255, 0.64);
   --fg-faint: rgba(255, 255, 255, 0.42);
@@ -38,7 +40,11 @@ html.dark .q-date::-webkit-calendar-picker-indicator { filter: invert(1); opacit
 html.dark .cm-row .dot { border-color: rgba(255, 255, 255, 0.14); }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { background: transparent; }
+html, body {
+  background: var(--canvas);
+  color-scheme: light;
+}
+html.dark, html.dark body { color-scheme: dark; }
 
 /* ── 全局滚动条：纤细 + 半透明，暗色主题下不突兀 ── */
 * {
