@@ -60,7 +60,11 @@ MIT
 
 ---
 
-## Note
+## Data Source
+
+Quotes and fundamentals come from East Money public endpoints, for personal record-keeping and study only, and are not investment advice.
+
+## Support Development — Buy me a token
 
 This plugin was built entirely through vibe coding. The tools and models involved include:
 
@@ -68,4 +72,15 @@ This plugin was built entirely through vibe coding. The tools and models involve
 - Claude Code (Opus 4.8): ~40% of the work
 - Antigravity (Gemini 3.5 Flash): ~20% of the work
 
-Quotes and fundamentals come from East Money public endpoints, for personal record-keeping and study only, and are not investment advice. Please use it at your own discretion.
+(The figures above are estimates from the plugin's first release; it keeps being updated, always with the most capable models available at the time.)
+
+Top-tier models are expensive and my study schedule is tight, so this work has not come easily. If you like this plugin or benefit from it, you are warmly invited to support its development. I will keep updating it and making the experience better.
+
+Please leave your LianDi (ld246) username or any other social account with your payment, and I will add you to the plugin's sponsor list as a token of my gratitude. Your support is my greatest motivation to create!
+
+| ![WeChat Pay](https://fastly.jsdelivr.net/gh/fujingzhai/stock-block@main/assets/sponsor-wechat.png) | ![Alipay](https://fastly.jsdelivr.net/gh/fujingzhai/stock-block@main/assets/sponsor-alipay.jpg) |
+| :---: | :---: |
+
+## Sponsors
+
+- [youxia](https://ld246.com/member/youxia)
