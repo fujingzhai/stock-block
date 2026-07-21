@@ -121,14 +121,14 @@ export default class StockBlockPlugin extends Plugin {
   private insertFromSlash(protyle: Protyle, nodeElement: HTMLElement) {
     const context = contextFromProtyle(protyle, nodeElement);
     try {
-      protyle.insert(widgetMarkdown(), true, true);
+      protyle.insert(iframeMarkdown(), true, true);
     } catch (err) {
       console.error("stock-block: protyle.insert 失败，回退到内核插入", err);
       this.insertAtCursor(context);
     }
   }
 
-  /** 在光标所在块下方插入挂件块；找不到光标时追加到当前文档末尾 */
+  /** 在光标所在块下方插入 IFrame 块；找不到光标时追加到当前文档末尾 */
   private async insertAtCursor(context = getCurrentContext()) {
     const docID = await resolveDocID(context);
     if (!docID) {
@@ -137,7 +137,7 @@ export default class StockBlockPlugin extends Plugin {
     }
     try {
       const previousID = context.blockID && context.blockID !== docID ? context.blockID : undefined;
-      const operations = await insertWidgetBlock(docID, previousID);
+      const operations = await insertIFrameBlock(docID, previousID);
       const insertedID = operations?.[0]?.doOperations?.[0]?.id || "";
       if (isBlockID(insertedID)) {
         await post("/api/attr/setBlockAttrs", {
@@ -151,15 +151,15 @@ export default class StockBlockPlugin extends Plugin {
   }
 }
 
-function widgetMarkdown(): string {
+function iframeMarkdown(): string {
   const src = "/plugins/stock-block/widget/index.html?v=0.1.5";
-  return `<iframe src="${src}" data-subtype="widget" border="0" frameborder="no" framespacing="0" allowfullscreen="true"></iframe>`;
+  return `<iframe src="${src}" border="0" frameborder="no" framespacing="0" allowfullscreen="true"></iframe>`;
 }
 
-async function insertWidgetBlock(docID: string, previousID?: string): Promise<BlockOperation[]> {
+async function insertIFrameBlock(docID: string, previousID?: string): Promise<BlockOperation[]> {
   const payload: Record<string, unknown> = {
     dataType: "markdown",
-    data: widgetMarkdown(),
+    data: iframeMarkdown(),
     parentID: docID
   };
   if (previousID) {

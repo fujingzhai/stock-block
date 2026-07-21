@@ -8,7 +8,7 @@
       "https://fastly.jsdelivr.net/gh/fujingzhai/stock-block@main/assets/sponsor-alipay.jpg"
     ]
   },
-  "version": "0.3.6",
+  "version": "0.3.7",
   "minAppVersion": "3.6.0",
   "backends": [
     "windows",
